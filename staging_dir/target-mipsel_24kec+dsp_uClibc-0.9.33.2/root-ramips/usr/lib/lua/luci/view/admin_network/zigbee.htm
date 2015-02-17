@@ -1,0 +1,221 @@
+<%#
+LuCI - Lua Configuration Interface
+Copyright 2008 Steven Barth <steven@midlink.org>
+Copyright 2008-2011 Jo-Philipp Wich <xm@subsignal.org>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+-%>
+
+<%
+	require "luci.fs"
+	require "luci.tools.status"
+	require "luci.http"
+
+	-- ====== Kapparock , must attach ======
+	if luci.http.formvalue("status") == "2" then
+		local outFile = io.open("/rstmp/rsserialrpc","w")
+		outFile:write(luci.http.formvalue("message"))
+		outFile:close()
+		
+		local file=io.open("/tmp/run/rsserial.pid","r")
+		local pid=file:read("*a")
+		file:close()
+		
+		local os=require "os"
+		os.execute("kill -s 64 "..pid)
+		return
+	end
+	
+	if luci.http.formvalue("status") == "3" then
+		
+		function printFile(name)
+			local xfile = io.open(name,"r")
+			local rtn = xfile:read("*a")
+			xfile:close()
+			return rtn:gsub("\n", "")
+		end
+		
+		local rv = printFile("/tmp/hanstatus.json") 
+		
+		luci.http.prepare_content("application/json")
+		luci.http.write(rv)
+		
+		return 
+	end
+	-- ****** Kapparock, must attach ******
+	
+	local system, model = luci.sys.sysinfo()
+-%>
+
+<%+header%>
+
+<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+function refreshDevice(nwkAddr)
+{
+	var packMessage = function(messageObj)
+	{
+		messageObj.type = 2;
+		return {status: 2,message:JSON.stringify(messageObj)};
+	};
+	var messageObj = {};
+	messageObj.addr = nwkAddr;
+	messageObj.query = "hello string";
+	XHR.get('<%=REQUEST_URI%>', packMessage(messageObj), function(x,info){});
+	
+};
+
+XHR.poll(2,'<%=REQUEST_URI%>', {status:3},
+		function(x,info) {
+		var hanstatus = eval('(' + x.responseText + ')');
+		var han_status_table = document.getElementById("hanstatus_table");
+		if (han_status_table) {
+			//========================
+			 /* clear all rows */
+			while( han_status_table.rows.length > 1 )
+				{han_status_table.rows[0].parentNode.deleteRow(1);} 	
+			
+			function expand_row(obj) 
+			{
+			 	function _expand_row(obj) {
+			 		if (obj.path.length ==0) return [];
+			 		var rtn=[];
+			 		var select = obj.path.pop();
+			 		
+			 		for (var k = 0;k<select.length;k++) 
+			 		{
+				 		var data = obj.data[select[k]];
+				 		
+				 		if (!data)
+				 			{continue;}
+				 		for (var i =0;i<data.length; i++) 
+				 		{
+				 			var next = {data:data[i],path:obj.path, _parent:obj.data};
+				 			var result = _expand_row(next);
+				 			rtn = rtn.concat(result);
+				 			var td;
+				 			if (result.length>0) 
+				 			{
+				 				result[0].insertCell(0);
+				 				td = result[0].cells[0];
+				 				td.rowSpan = result.length;
+				 			} else 
+				 			{		
+				 				tr = document.createElement("tr");
+				 				for (var j=0;j<obj.path.length;j++) 
+				 				{
+				 					tr.insertCell(0).innerHTML = "N/A";	
+				 				}
+				 				tr.insertCell(0);
+				 				td = tr.cells[0];
+				 				//td.rowSpan = 1;	
+				 				rtn.push(tr);
+				 			}
+				 			
+				 			
+				 			td.innerHTML = data[i].id;//+"<br>";
+				 			if (data[i].data)
+				 				{
+				 				td.innerHTML +=" : " + data[i].data;
+				 				}
+				 			else
+				 				{
+				 				td.innerHTML += "<br>";
+				 				}
+				 			
+				 			// select[k] is in ["assoc","endpoint","cluster",["attribute"]];
+				 			if (select[k] == "assoc")
+				 			{
+				 				td.innerHTML += '<input type="button" class="cbi-button cbi-button-reload" style="width:100px" onclick="refreshDevice(\''+ data[i].id +'\')" title="Reconnect this interface" value="Refresh" />';
+				 			}			 					 		
+				 		}
+			 		}
+			 		obj.path.push(select);
+			 		return rtn;
+			 	}
+			 	
+			 	obj.path.reverse();
+			 	obj._parent = null;
+			 	for (var _key in obj.path)
+			 	{
+			 		if (Array.isArray(obj.path[_key]) == false)
+			 		{
+			 			var temp =  obj.path[_key];
+			 			obj.path[_key] = [temp];
+			 		}
+			 	}
+			 	return _expand_row(obj);
+			}
+
+		 	var path = ["assoc","endpoint","cluster",["attribute"]];
+			var result = expand_row({data:hanstatus[2],path:path});
+		 	for (var i = 0;i<result.length;i++) {
+		 		han_status_table.rows[0].parentNode.appendChild(result[i]);
+		 	}
+		 	
+		 }
+	});
+
+//]]></script>
+<style>
+table.displaystatus {
+	/* width:150px; */
+	margin-top: 0; 
+	margin-bottom: 0; 
+	font-family: Andale Mono, Lucida Console, Monaco, Liberation, fixed, monospace; 
+	font-size: 14px; 
+	overflow:auto;    
+	background:#F7F7F7 !important; 
+	color:#000;
+	border-collapse:collapse;
+	border-width:1px;
+	border-color:black;
+	border-style: solid;
+}
+table.displaystatus td{
+	width:90px;
+	margin-top: 0; 
+	margin-bottom: 0; 
+	font-family: Andale Mono, Lucida Console, Monaco, Liberation, fixed, monospace; 
+	font-size: 14px; 
+	overflow:auto;    
+	background:#F7F7F7 !important; 
+	color:#000;
+	border-collapse:collapse;
+	border-width:1px;
+	border-color:gray;
+	border-style: solid;
+	padding:2px;
+}
+</style>
+<h2><a id="content" name="content"><%:Zigbee%></a></h2>
+<table class ="displaystatus" id="hanstatus_table">
+<tr>
+			<th >Associate</th>
+			<th >Endpoint</th>
+			<th >Cluster</th>
+			<th >Attr/Cmd</th>
+		</tr>
+</table>
+
+<%-
+	require "luci.util"
+	require "nixio.fs"
+
+	local plugins = nixio.fs.dir(luci.util.libpath() .. "/view/admin_status/index")
+	if plugins then
+		local inc
+		for inc in plugins do
+			if inc:match("%.htm$") then
+				include("admin_status/index/" .. inc:gsub("%.htm$", ""))
+			end
+		end
+	end
+-%>
+
+<%+footer%>

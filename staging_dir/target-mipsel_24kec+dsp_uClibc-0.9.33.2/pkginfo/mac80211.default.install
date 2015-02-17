@@ -1,0 +1,7 @@
+kmod-cfg80211
+kmod-mac80211
+kmod-rt2x00-lib
+kmod-rt2x00-mmio
+kmod-rt2800-lib
+kmod-rt2800-mmio
+kmod-rt2800-soc

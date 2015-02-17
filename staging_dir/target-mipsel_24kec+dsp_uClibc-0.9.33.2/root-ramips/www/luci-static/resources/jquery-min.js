@@ -1,0 +1,1 @@
+/usr/lib/rsserial/luci-kapparock-mod/jquery-min.js

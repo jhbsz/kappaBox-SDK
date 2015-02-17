@@ -1,0 +1,2 @@
+#! /bin/sh
+exec '/buildroot/buildroot/trunk/staging_dir/host/bin/bison' -y "$@"

@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+# Example script
+# Copyright (C) 2007 OpenWrt.org
+ 
+START=98
+STOP=10
+ 
+start() {    
+	mkdir -p /tmp/rsserialtempfiles
+	rsserial-watch
+}                 
+ 
+stop() {
+	if [ -f /var/run/rsserial-watch.pid ]; then         
+  kill $(cat /var/run/rsserial-watch.pid)
+	fi
+}
+
+restart() {
+	stop
+	sleep 1
+	start	
+}

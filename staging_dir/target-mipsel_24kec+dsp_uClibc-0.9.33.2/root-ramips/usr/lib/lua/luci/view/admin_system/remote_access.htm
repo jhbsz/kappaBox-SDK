@@ -1,0 +1,132 @@
+<%#
+LuCI - Lua Configuration Interface
+Copyright 2008 Steven Barth <steven@midlink.org>
+Copyright 2008-2012 Jo-Philipp Wich <xm@subsignal.org>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+-%>
+
+<%
+	require "luci.fs"
+	require "luci.tools.status"
+	require "luci.http"
+	require "luci.util"
+
+	-- ****** Kapparock, must attach ******
+	local submit = luci.http.formvalue("submit")
+	local action = luci.http.formvalue("action")
+	JSON = (loadfile "/usr/lib/lua/luci/JSON.lua")()		
+	JSON.strictTypes = true
+	if (submit and submit=="1") then
+		if (action=="remove") then 
+			fs.unlink("/usr/lib/rsserial/authorized_user")
+			fs.unlink("/usr/lib/rsserial/device_data")
+		else
+
+			if fs.access("/usr/lib/rsserial/device_data") then
+				local authUser = io.open("/usr/lib/rsserial/device_data","r")
+				local userString = authUser:read("*a")
+				authUser:close()
+				local user = JSON:decode(userString)
+			
+				if (action == "enable") then
+					user["connect"] = 1
+				elseif (action == "disable") then
+					user["connect"] = 0
+				end
+			
+				fs.writefile("/usr/lib/rsserial/device_data", JSON:encode(user))
+			end
+		end
+	end
+	
+	local authUser = io.open("/usr/lib/rsserial/device_data","r")
+	local user = nil
+	local credential = nil
+	local connect = 0
+	if authUser then
+		user = authUser:read("*a")
+		authUser:close()
+		credential = JSON:decode(user)["authorizedUser"]["email"] or nil
+		connect = JSON:decode(user)["connect"] or 0
+	end
+	-- ****** Kapparock, must attach ******
+
+	local system, model = luci.sys.sysinfo()
+-%>
+
+<%+header%>
+<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+function sign_in() {
+	XHR.get('<%=luci.dispatcher.build_url()%>/api/sign_in', {'email':document.getElementById("email").value, 'password':document.getElementById("password").value}, function(x,info) {
+		window.location = '<%=REQUEST_URI%>';
+	});
+}
+//]]></script>
+<% if credential then %>
+<h2><a id="content" name="content"><%:Remote Access%></a></h2>
+<!--  <legend><%:This device has been sign in with %><%=credential%></legend>-->
+<fieldset class="cbi-section">
+	<table class="cbi-section-table" style="width:100%">
+		<tr class="cbi-section-table-titles">
+			<th class="cbi-section-table-cell" style="text-align:left">&#160;</th>
+			<th class="cbi-section-table-cell" style="text-align:left"><%:Associated Email Address%></th>
+			<th class="cbi-section-table-cell" style="text-align:left"><%:State%></th>
+		</tr>
+		<tr class="cbi-section-table-row">
+			<td style="text-align:left; width:10%"><a href="<%=REQUEST_URI%>?submit=1&amp;action=remove"><%:Remove%></a></td>
+			<td style="text-align:left"><%=credential%></td>
+			<td style="text-align:left">
+			<% if connect == 1 then %>
+			<a class="label success" href="<%=REQUEST_URI%>?submit=1&amp;action=disable">Enabled</a>
+			<% else %>
+			<a class="label" href="<%=REQUEST_URI%>?submit=1&amp;action=enable">Disabled</a>
+			<% end %>
+			</td>
+		</tr>
+	</table>
+</fieldset>
+<% else %>
+<form method="post" autocomplete="off" action="<%=pcdata(luci.http.getenv("REQUEST_URI"))%>">
+	<div class="cbi-map">
+		<h2><a id="content" name="content"><%:Remote Access%></a></h2>
+		<div class="cbi-map-descr">
+			<%:Sign in to remote access with email%>
+			<%- if fuser then %>
+			<div class="error"><%:Invalid username and/or password! Please try again.%></div>
+			<br />
+			<% end -%>
+		</div>
+		<fieldset class="cbi-section"><fieldset class="cbi-section-node">
+			<div class="cbi-value">
+				<label class="cbi-value-title"><%:Email%></label>
+				<div class="cbi-value-field">
+					<input id="email" class="cbi-input-email" type="text" name="rpcemail" value="" />
+				</div>
+			</div>
+			<div class="cbi-value cbi-value-last">
+				<label class="cbi-value-title"><%:Password%></label>
+				<div class="cbi-value-field">
+					<input id="password" class="cbi-input-password" type="password" name="rpcpassword" />
+				</div>
+			</div>
+		</fieldset></fieldset>
+	</div>
+
+	<div>
+		<input type="button" value="<%:Sign In%>" class="cbi-button cbi-button-apply" onclick="sign_in()"/>
+		<input type="reset" value="<%:Reset%>" class="cbi-button cbi-button-reset" />
+	</div>
+</form>
+<script type="text/javascript">//<![CDATA[
+	var input = document.getElementById('fullname');
+	if (input)
+		input.focus();
+//]]></script>
+<% end %>
+<%+footer%>

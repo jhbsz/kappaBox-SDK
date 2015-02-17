@@ -1,0 +1,1 @@
+/usr/lib/rsserial/widgetObj.json
